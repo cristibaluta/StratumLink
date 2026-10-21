@@ -7,10 +7,12 @@ let package = Package(
         .macOS(.v15)
     ],
     products: [
-        .library(name: "StratumLink", targets: ["StratumLink"])
+        .library(name: "StratumLink", targets: ["StratumLink"]),
+        .executable(name: "StratumLinkDemo", targets: ["StratumLinkDemo"])
     ],
     targets: [
         .target(name: "StratumLink"),
+        .executableTarget(name: "StratumLinkDemo", dependencies: ["StratumLink"]),
         .testTarget(name: "StratumLinkTests", dependencies: ["StratumLink"])
     ],
     swiftLanguageModes: [.v5]
