@@ -5,14 +5,6 @@
 //  Created by Cristian Baluta on 20.09.2026.
 //
 
-
-//
-//  MockMachineSimulator.swift
-//  Stratum CNC
-//
-//  Created by Cristian Baluta on 20.09.2026.
-//
-
 import Foundation
 
 /// A fake firmware behind `MachineConnection`'s "Mock Machine" entry
