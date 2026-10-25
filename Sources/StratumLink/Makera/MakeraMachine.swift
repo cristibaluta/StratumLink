@@ -19,6 +19,13 @@ public struct MakeraMachine: Identifiable, Equatable, Hashable {
     public let port: UInt16
     public let busy: Bool
 
+    // Identity is `id` only. Discovery refreshes `busy` every second; with
+    // synthesized conformances the refreshed value would no longer equal the
+    // one held by a `Picker`/`List` selection, which then shows no selection
+    // and fires spurious `onChange`s (disconnect + reconnect).
+    public static func == (lhs: MakeraMachine, rhs: MakeraMachine) -> Bool { lhs.id == rhs.id }
+    public func hash(into hasher: inout Hasher) { hasher.combine(id) }
+
     public init(name: String, ip: String, port: UInt16, busy: Bool) {
         self.name = name
         self.ip = ip
