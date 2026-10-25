@@ -1,10 +1,3 @@
-//
-//  MachineInfoTests.swift
-//  StratumLink
-//
-//  Created by Cristian Baluta on 25.10.2026.
-//
-
 import XCTest
 @testable import StratumLink
 
@@ -27,7 +20,7 @@ final class MachineInfoTests: XCTestCase {
     }
 
     @MainActor
-    func testListingAndVersion() {
+    func testListingAndVersion() async {
         let info = MachineInfo()
         var sent: [String] = []
         info.configure { sent.append($0) }
@@ -37,8 +30,24 @@ final class MachineInfoTests: XCTestCase {
         info.handleMachineLine("b.nc 10 20260101000000")
         info.handleMachineLine("sub/ 0 20260101000000")
         info.handleMachineLine("ok")
+        try? await Task.sleep(nanoseconds: 700_000_000)
         XCTAssertEqual(info.firmwareVersion, "1.1.2.0.1.13")
         XCTAssertEqual(info.files.map(\.name), ["sub", "b.nc"])
         XCTAssertFalse(info.isLoadingFiles)
+    }
+
+    @MainActor
+    func testMultiLineFrameIsSplit() async throws {
+        let info = MachineInfo()
+        info.configure { _ in }
+        info.listFiles()
+        info.handleMachineLine("""
+        .md5/ 0 20260507081102
+        goto-pack-pos-z1.nc  54 20260525113742
+        MakeraStudioPowerClicker_TOP_20260811164147.nc  1130921 19800101002544
+        """)
+        info.handleMachineLine("more.nc  7 20260817202414\nok")
+        try await Task.sleep(nanoseconds: 700_000_000)
+        XCTAssertEqual(info.files.count, 4)
     }
 }

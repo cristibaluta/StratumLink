@@ -1,8 +1,6 @@
 //
-//  MachineFileEntry.swift
+//  MachineInfo.swift
 //  StratumLink
-//
-//  Created by Cristian Baluta on 25.10.2026.
 //
 
 import Foundation
@@ -118,7 +116,7 @@ public final class MachineInfo: ObservableObject {
         pendingDirectory = directory
         pendingEntries = []
         isLoadingFiles = true
-        send?("ls -e -s \(directory)")
+        send?("ls -e -s \(MakeraFraming.escapeConsolePath(directory))")
         armTimeout()
     }
 
@@ -136,7 +134,16 @@ public final class MachineInfo: ObservableObject {
     // MARK: Incoming
 
     func handleMachineLine(_ line: String) {
+        // The firmware can pack many lines (a whole directory listing) into
+        // one frame, and the connection hands those over as a single string.
+        for part in line.split(whereSeparator: \.isNewline) {
+            handleSingleLine(String(part))
+        }
+    }
+
+    private func handleSingleLine(_ line: String) {
         let text = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
 
         if text.lowercased().hasPrefix("version") {
             if let eq = text.firstIndex(of: "=") {
@@ -147,17 +154,19 @@ public final class MachineInfo: ObservableObject {
 
         guard let directory = pendingDirectory else { return }
         if text == "ok" {
-            finishListing()
+            // The listing may arrive in several pieces; give any that are
+            // still in flight a moment before closing it.
+            armTimeout(after: 0.4)
         } else if let entry = MachineFileEntry.parse(line: text, directory: directory) {
-            pendingEntries.append(entry)
+            if !pendingEntries.contains(entry) { pendingEntries.append(entry) }
             armTimeout()
         }
     }
 
-    private func armTimeout() {
+    private func armTimeout(after delay: TimeInterval? = nil) {
         let id = UUID()
         listingID = id
-        DispatchQueue.main.asyncAfter(deadline: .now() + quietTimeout) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + (delay ?? quietTimeout)) { [weak self] in
             guard let self, self.listingID == id, self.pendingDirectory != nil else { return }
             self.finishListing()
         }

@@ -34,6 +34,11 @@ public enum SL {
     public typealias JobRunner = GCodeJobRunner
     public typealias Bounds = GCodeBounds
 
+    // MARK: Machine files & info
+    public typealias Info = MachineInfo
+    public typealias FileEntry = MachineFileEntry
+    public typealias Downloader = MachineFileDownloader
+
     // MARK: Commands
     public typealias Command = CNCCommand
     public typealias ATCStatus = StratumLink.ATCStatus

@@ -75,6 +75,8 @@ public final class MachineSession {
     public let uploader: GCodeUploader
     /// Firmware version and SD-card file list.
     public let info = MachineInfo()
+    /// Fetches files from the SD card.
+    public let downloader = MachineFileDownloader()
 
     /// Receives alerts, connection changes, etc. See `MachineSessionEvent`.
     public var onEvent: ((MachineSessionEvent) -> Void)?
@@ -186,6 +188,18 @@ public final class MachineSession {
             self.lastUploadedRemotePath = remotePath
             self.startRun(remotePath: remotePath)
         }
+        downloader.configure(
+            wireProtocol: { [weak self] in self?.connection.wireProtocol },
+            isMock: { [weak self] in self?.connection.isMockConnection ?? false },
+            sendFrame: { [weak self] ptype, payload in
+                self?.connection.sendFileFrame(ptype: ptype, payload: payload) { _ in }
+            },
+            setBusy: { [weak self] busy in self?.connection.isStatusPollingPaused = busy },
+            log: { [weak self] message in self?.connection.appendLog(message) }
+        )
+        connection.onFileTransferFrame = { [weak self] ptype, payload in
+            self?.downloader.handleFrame(ptype, payload)
+        }
         info.configure { [weak self] command in
             self?.sendRawCommand(command)
         }
@@ -199,6 +213,7 @@ public final class MachineSession {
             self?.jobRunner.handleMachineLine(line)
             self?.uploader.handleMachineLine(line)
             self?.info.handleMachineLine(line)
+            self?.downloader.handleMachineLine(line)
             self?.raiseAlert(forLine: line)
         }
         connection.$status
@@ -224,6 +239,23 @@ public final class MachineSession {
                 self?.connectionChanged(connected)
             }
             .store(in: &cancellables)
+    }
+
+    // MARK: - Files on the machine
+
+    /// Downloads a G-code file from the SD card and returns its text.
+    /// Refused while a job line-stream or upload is in progress.
+    public func downloadGCode(path: String, completion: @escaping (Result<String, Error>) -> Void) {
+        guard connection.isConnected, !jobRunner.isActive, !uploader.isActive else {
+            completion(.failure(NSError(domain: "StratumLink.Download", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "Not connected, or the machine is busy with a transfer."])))
+            return
+        }
+        downloader.download(path: path) { result in
+            completion(result.map {
+                String(data: $0, encoding: .utf8) ?? String(decoding: $0, as: UTF8.self)
+            })
+        }
     }
 
     // MARK: - Sending
@@ -655,6 +687,7 @@ public final class MachineSession {
         pendingPlayPath = nil
         pendingLevelingArea = nil
         info.reset()
+        downloader.connectionClosed()
         jobRunner.stop()
         uploader.connectionClosed()
         onEvent?(.disconnected)

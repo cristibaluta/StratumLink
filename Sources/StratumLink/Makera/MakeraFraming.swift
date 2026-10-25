@@ -33,6 +33,18 @@ enum MakeraFraming {
 
     static let maxFrameDataLength = 8200
 
+    /// How the firmware wants paths and arguments written in console
+    /// commands: spaces as 0x01, and `? & ! ~` (which the link would treat as
+    /// realtime/control characters) as 0x02...0x05. From Carvera_Controller's
+    /// `Controller.escape` / `lsCommand` / `downloadCommand`.
+    static func escapeConsolePath(_ path: String) -> String {
+        path.replacingOccurrences(of: " ", with: "\u{1}")
+            .replacingOccurrences(of: "?", with: "\u{2}")
+            .replacingOccurrences(of: "&", with: "\u{3}")
+            .replacingOccurrences(of: "!", with: "\u{4}")
+            .replacingOccurrences(of: "~", with: "\u{5}")
+    }
+
     static let fileTransferTypes: Set<UInt8> = [
         ptypeFileStart, ptypeFileMD5, ptypeFileView,
         ptypeFileData, ptypeFileEnd, ptypeFileCancel, ptypeFileRetry,

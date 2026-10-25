@@ -271,6 +271,13 @@ public final class MachineConnection: ObservableObject {
     /// what the machine actually puts in it, without touching the parser.
     public var onFileTransferFrame: ((UInt8, Data) -> Void)?
 
+    /// True while connected to the simulated machine.
+    public var isMockConnection: Bool { mockSimulator != nil }
+
+    /// Set during a file transfer: the reference controller stops its status
+    /// polling while a transfer owns the link, so we do too.
+    public var isStatusPollingPaused = false
+
     private var sessionID = UUID()
     private var connection: NWConnection?
     private var pollTimer: Timer?
@@ -287,6 +294,7 @@ public final class MachineConnection: ObservableObject {
 
     // Makera (framed) parsing state
     private let frameParser = MakeraFrameParser()
+    private var normalInfoBuffer = Data()
 
     // Protocol detection state
     private var detectionBuffer = Data()
@@ -373,6 +381,8 @@ public final class MachineConnection: ObservableObject {
         detectionBuffer.removeAll()
         detectionAttempt = 0
         frameParser.reset()
+        normalInfoBuffer.removeAll()
+        isStatusPollingPaused = false
     }
 
     public func clearLogs() {
@@ -609,7 +619,7 @@ public final class MachineConnection: ObservableObject {
         pollTimer?.invalidate()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self, self.sessionID == sessionID else { return }
+                guard let self, self.sessionID == sessionID, !self.isStatusPollingPaused else { return }
                 self.requestStatus()
             }
         }
@@ -671,7 +681,28 @@ public final class MachineConnection: ObservableObject {
                 onFileTransferFrame?(frame.ptype, frame.payload)
                 continue
             }
-            guard let text = String(data: frame.payload, encoding: .utf8) else { continue }
+            if frame.ptype == MakeraFraming.ptypeNormalInfo {
+                // Fragments of a text line, not whole lines: the machine can
+                // split a line across frames or pack several into one. Only
+                // a newline completes a line (as in Carvera_Controller).
+                for byte in frame.payload {
+                    if byte == 0x0A {
+                        let line = String(decoding: normalInfoBuffer, as: UTF8.self)
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        normalInfoBuffer.removeAll()
+                        if !line.isEmpty { handleLine(line) }
+                    } else {
+                        normalInfoBuffer.append(byte)
+                    }
+                }
+                continue
+            }
+            guard let text = String(data: frame.payload, encoding: .utf8) else {
+                // Binary payload under a non-file ptype: don't drop it
+                // silently — a download in progress logs and inspects it.
+                onFileTransferFrame?(frame.ptype, frame.payload)
+                continue
+            }
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
             handleLine(trimmed)
