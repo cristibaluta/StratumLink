@@ -56,6 +56,7 @@ final class DemoModel: ObservableObject {
             session.connection.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
             session.uploader.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
             session.jobRunner.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+            session.info.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
             discovery.objectWillChange.map { _ in () }.eraseToAnyPublisher()
         )
         .sink { [weak self] _ in self?.objectWillChange.send() }

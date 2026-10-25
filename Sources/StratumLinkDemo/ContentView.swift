@@ -12,7 +12,7 @@ struct ContentView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            column { machinesBox; statusBox; alertsBox; eventsBox }
+            column { machinesBox; statusBox; infoBox; alertsBox; eventsBox }
                 .frame(width: 280)
             column { jogBox; spindleBox; probeBox; atcBox; accessoriesBox }
                 .frame(width: 340)
@@ -57,6 +57,61 @@ struct ContentView: View {
                     }
                     if let error = model.discovery.lastError {
                         Text(error).font(.caption).foregroundStyle(.red)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    // MARK: - Machine info & SD files
+
+    private var infoBox: some View {
+        let info = model.session.info
+        return GroupBox("Machine info") {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Firmware: \(info.firmwareVersion ?? "—")")
+                    .font(.system(.caption, design: .monospaced))
+                HStack {
+                    Text(info.currentDirectory)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if info.isLoadingFiles { ProgressView().controlSize(.small) }
+                    Button("Refresh") { info.refresh() }
+                        .disabled(!connected || model.jobRunner.isActive || model.uploader.isActive)
+                }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 2) {
+                        if info.files.isEmpty {
+                            Text(info.isLoadingFiles ? "Loading…" : "No files")
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(info.files) { file in
+                            HStack {
+                                Text(file.isDirectory ? "📁 \(file.name)" : file.name)
+                                    .lineLimit(1).truncationMode(.middle)
+                                Spacer()
+                                if !file.isDirectory {
+                                    Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if file.isDirectory { info.listFiles(in: file.path) }
+                            }
+                            .help(file.modified.map { $0.formatted() } ?? file.path)
+                        }
+                    }
+                    .font(.system(.caption, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(height: 140)
+                if info.currentDirectory != MachineInfo.defaultDirectory {
+                    Button("Up") {
+                        let parent = (info.currentDirectory as NSString).deletingLastPathComponent
+                        info.listFiles(in: parent)
                     }
                 }
             }

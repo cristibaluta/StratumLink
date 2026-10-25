@@ -114,6 +114,21 @@ final class MockMachineSimulator {
         let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
         let upper = trimmed.uppercased()
 
+        if upper == "VERSION" {
+            reply("version = 1.1.2.0.1.13")
+            return
+        }
+
+        if upper.hasPrefix("LS ") {
+            after(0.1) {
+                reply("macros/ 0 20260101120000")
+                reply("demo part.nc 18342 20260920101530")
+                reply("test.nc 2210 20260921174502")
+                reply("ok")
+            }
+            return
+        }
+
         if upper == "$H" {
             after(0.5) { [weak self] in
                 self?.machinePosition = (0, 0, 0)

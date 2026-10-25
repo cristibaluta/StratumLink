@@ -73,6 +73,8 @@ public final class MachineSession {
     public let connection: MachineConnection
     public let jobRunner: GCodeJobRunner
     public let uploader: GCodeUploader
+    /// Firmware version and SD-card file list.
+    public let info = MachineInfo()
 
     /// Receives alerts, connection changes, etc. See `MachineSessionEvent`.
     public var onEvent: ((MachineSessionEvent) -> Void)?
@@ -184,6 +186,9 @@ public final class MachineSession {
             self.lastUploadedRemotePath = remotePath
             self.startRun(remotePath: remotePath)
         }
+        info.configure { [weak self] command in
+            self?.sendRawCommand(command)
+        }
         jobRunner.onFinish = { [weak self] in
             self?.levelingFinished()
         }
@@ -193,6 +198,7 @@ public final class MachineSession {
         connection.onLine = { [weak self] line in
             self?.jobRunner.handleMachineLine(line)
             self?.uploader.handleMachineLine(line)
+            self?.info.handleMachineLine(line)
             self?.raiseAlert(forLine: line)
         }
         connection.$status
@@ -200,6 +206,15 @@ public final class MachineSession {
             .removeDuplicates()
             .sink { [weak self] state in
                 Task { @MainActor in self?.machineStateChanged(to: state) }
+            }
+            .store(in: &cancellables)
+        // Ask for version + files once the wire protocol is known — sending
+        // earlier would use the wrong framing.
+        connection.$wireProtocol
+            .compactMap { $0 }
+            .sink { [weak self] _ in
+                guard let self, !self.jobRunner.isActive, !self.uploader.isActive else { return }
+                self.info.refresh()
             }
             .store(in: &cancellables)
         connection.$isConnected
@@ -639,6 +654,7 @@ public final class MachineSession {
         }
         pendingPlayPath = nil
         pendingLevelingArea = nil
+        info.reset()
         jobRunner.stop()
         uploader.connectionClosed()
         onEvent?(.disconnected)
