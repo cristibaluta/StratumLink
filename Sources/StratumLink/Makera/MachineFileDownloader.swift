@@ -36,6 +36,9 @@ public final class MachineFileDownloader: ObservableObject {
     }
 
     @Published public private(set) var state: State = .idle
+    /// 0...1 while downloading, from the packets received so far. Stays 0
+    /// until the machine has said how many packets there are.
+    @Published public private(set) var progress: Double = 0
 
     public var isActive: Bool {
         if case .downloading = state { return true }
@@ -87,6 +90,7 @@ public final class MachineFileDownloader: ObservableObject {
 
         if isMock?() == true {
             state = .downloading(path: path, bytesReceived: 0)
+            progress = 0
             let id = UUID(); watchdogID = id
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
                 guard let self, self.watchdogID == id else { return }
@@ -101,6 +105,7 @@ public final class MachineFileDownloader: ObservableObject {
         }
 
         self.path = path
+        progress = 0
         phase = .waitMD5
         totalPackets = 0
         nextPacket = 1
@@ -159,6 +164,7 @@ public final class MachineFileDownloader: ObservableObject {
             guard seq == nextPacket else { return } // duplicate / out of order
             received.append(payload.dropFirst(4))
             state = .downloading(path: path, bytesReceived: received.count)
+            progress = totalPackets > 0 ? Double(seq) / Double(totalPackets) : 0
             if seq >= totalPackets {
                 sendFrame?(MakeraFraming.ptypeFileEnd, Data())
                 finish()
