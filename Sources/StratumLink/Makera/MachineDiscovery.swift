@@ -11,6 +11,16 @@ import Network
 @MainActor
 public final class MachineDiscovery: ObservableObject {
 
+    public static let shared = MachineDiscovery()
+
+    /// Starts listening unless it already does. Safe to call from every screen that needs the list.
+    public func startScanningIfNeeded() {
+        guard !isScanning else {
+            return
+        }
+        startScanning()
+    }
+
     @Published public private(set) var machines: [MakeraMachine] = [.mock]
     @Published public private(set) var isScanning = false
     @Published public var lastError: String?
