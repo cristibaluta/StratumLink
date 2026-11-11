@@ -4,7 +4,8 @@ import PackageDescription
 let package = Package(
     name: "StratumLink",
     platforms: [
-        .macOS(.v15)
+        .macOS(.v13),
+        .iOS(.v15)
     ],
     products: [
         .library(name: "StratumLink", targets: ["StratumLink"]),
