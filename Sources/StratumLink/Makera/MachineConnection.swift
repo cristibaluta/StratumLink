@@ -48,7 +48,9 @@ public struct MakeraPlayback: Equatable {
               let line = Self.wholeNumber(values[0]),
               let percent = Self.wholeNumber(values[1]),
               let seconds = Self.wholeNumber(values[2])
-        else { return nil }
+        else {
+            return nil
+        }
 
         self.currentLine = line
         self.percent = min(percent, 100)
@@ -58,7 +60,9 @@ public struct MakeraPlayback: Equatable {
     }
 
     private static func wholeNumber(_ value: Double) -> Int? {
-        guard let number = Int(exactly: value.rounded()), number >= 0 else { return nil }
+        guard let number = Int(exactly: value.rounded()), number >= 0 else {
+            return nil
+        }
         return number
     }
 
@@ -149,7 +153,9 @@ public struct MakeraMachineStatus: Equatable {
     /// alive and resumable, so a suspended machine still counts. (A
     /// feed-hold keeps `is_playing` at 1.)
     public var activeJob: MakeraPlayback? {
-        guard let playback else { return nil }
+        guard let playback else {
+            return nil
+        }
         return (playback.isPlaying || isSuspended) ? playback : nil
     }
 
@@ -159,7 +165,9 @@ public struct MakeraMachineStatus: Equatable {
     /// needs. Nil if it never got as far as line 1 (older firmware reports
     /// `P:0,0,0` when idle, which isn't worth showing).
     public var lastJob: MakeraPlayback? {
-        guard activeJob == nil, let playback, playback.currentLine > 0 else { return nil }
+        guard activeJob == nil, let playback, playback.currentLine > 0 else {
+            return nil
+        }
         return playback
     }
 
@@ -171,11 +179,16 @@ public struct MakeraMachineStatus: Equatable {
     }
 
     public static func parse(_ raw: String) -> MakeraMachineStatus? {
-        guard raw.hasPrefix("<"), raw.hasSuffix(">") else { return nil }
+        guard raw.hasPrefix("<"), raw.hasSuffix(">") else {
+            return nil
+        }
 
         let inner = raw.dropFirst().dropLast()
         let fields = inner.split(separator: "|").map(String.init)
-        guard let state = fields.first else { return nil }
+
+        guard let state = fields.first else {
+            return nil
+        }
 
         var mpos = (x: 0.0, y: 0.0, z: 0.0)
         var wpos = (x: 0.0, y: 0.0, z: 0.0)
@@ -183,15 +196,19 @@ public struct MakeraMachineStatus: Equatable {
 
         for field in fields.dropFirst() {
             let parts = field.split(separator: ":", maxSplits: 1).map(String.init)
-            guard parts.count == 2 else { continue }
+            guard parts.count == 2 else {
+                continue
+            }
             let values = parts[1].split(separator: ",").compactMap { Double($0) }
-            guard values.count >= 3 else { continue }
+            guard values.count >= 3 else {
+                continue
+            }
 
             switch parts[0] {
-            case "MPos": mpos = (values[0], values[1], values[2])
-            case "WPos": wpos = (values[0], values[1], values[2])
-            case "P": playback = MakeraPlayback(values: values)
-            default: break
+                case "MPos": mpos = (values[0], values[1], values[2])
+                case "WPos": wpos = (values[0], values[1], values[2])
+                case "P": playback = MakeraPlayback(values: values)
+                default: break
             }
         }
 
@@ -208,7 +225,7 @@ public struct MakeraMachineStatus: Equatable {
 /// already assumes (`?` status polling, `$X`/`$H`, and `GCodeUploader`'s
 /// Ctrl-X on cancel). Under the framed Makera protocol they travel as
 /// `ptypeCtrlSingle` frames, same as `?` always has.
-public enum MachineRealtimeCommand: UInt8 {
+public enum MachineRealtimeCommand: UInt8, Sendable {
     case statusQuery = 0x3F  // "?"
     case feedHold = 0x21     // "!"
     case cycleResume = 0x7E  // "~"
@@ -217,10 +234,10 @@ public enum MachineRealtimeCommand: UInt8 {
     /// How the command appears in the terminal log.
     public var logText: String {
         switch self {
-        case .statusQuery: "?"
-        case .feedHold: "! (feed hold)"
-        case .cycleResume: "~ (resume)"
-        case .softReset: "^X (soft reset)"
+            case .statusQuery: "?"
+            case .feedHold: "! (feed hold)"
+            case .cycleResume: "~ (resume)"
+            case .softReset: "^X (soft reset)"
         }
     }
 }
@@ -272,7 +289,9 @@ public final class MachineConnection: ObservableObject {
     public var onFileTransferFrame: ((UInt8, Data) -> Void)?
 
     /// True while connected to the simulated machine.
-    public var isMockConnection: Bool { mockSimulator != nil }
+    public var isMockConnection: Bool {
+        mockSimulator != nil
+    }
 
     /// Set during a file transfer: the reference controller stops its status
     /// polling while a transfer owns the link, so we do too.
@@ -320,7 +339,9 @@ public final class MachineConnection: ObservableObject {
 
         connection.stateUpdateHandler = { [weak self] state in
             Task { @MainActor in
-                guard let self, self.sessionID == sessionID else { return }
+                guard let self, self.sessionID == sessionID else {
+                    return
+                }
                 switch state {
                 case .ready:
                     self.isConnected = true
@@ -360,7 +381,9 @@ public final class MachineConnection: ObservableObject {
         rawLog.append("Connected to Mock Machine (simulated — no hardware).")
 
         simulator.onStatusLine = { [weak self] line in
-            guard let self, self.sessionID == sessionID else { return }
+            guard let self, self.sessionID == sessionID else {
+                return
+            }
             self.handleLine(line)
         }
         simulator.start()
@@ -415,7 +438,9 @@ public final class MachineConnection: ObservableObject {
 
     private func attemptProbe() {
         let sessionID = self.sessionID
-        guard let connection, wireProtocol == nil else { return }
+        guard let connection, wireProtocol == nil else {
+            return
+        }
         detectionAttempt += 1
         detectionBuffer.removeAll()
 
@@ -423,7 +448,9 @@ public final class MachineConnection: ObservableObject {
         connection.send(content: probe, completion: .contentProcessed { _ in })
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            guard let self, self.sessionID == sessionID, self.wireProtocol == nil else { return }
+            guard let self, self.sessionID == sessionID, self.wireProtocol == nil else {
+                return
+            }
 
             if let text = String(data: self.detectionBuffer, encoding: .utf8),
                text.localizedCaseInsensitiveContains("echo") {
@@ -453,13 +480,17 @@ public final class MachineConnection: ObservableObject {
         if let mockSimulator {
             rawLog.append("> \(command)")
             mockSimulator.handle(command: command) { [weak self] reply in
-                guard let self, self.sessionID == sessionID else { return }
+                guard let self, self.sessionID == sessionID else {
+                    return
+                }
                 self.handleLine(reply)
             }
             return
         }
 
-        guard let connection else { return }
+        guard let connection else {
+            return
+        }
 
         // Record our command in the raw logs
         rawLog.append("> \(command)")
@@ -469,9 +500,13 @@ public final class MachineConnection: ObservableObject {
             let stripped = command.trimmingCharacters(in: .whitespacesAndNewlines)
             let frame = MakeraFraming.buildFrame(ptype: MakeraFraming.ptypeCtrlMulti, payload: Data(stripped.utf8))
             connection.send(content: frame, completion: .contentProcessed { [weak self] error in
-                guard let error else { return }
+                guard let error else {
+                    return
+                }
                 Task { @MainActor in
-                    guard let self, self.sessionID == sessionID else { return }
+                    guard let self, self.sessionID == sessionID else {
+                        return
+                    }
                     self.lastError = "Send failed: \(error.localizedDescription)"
                 }
             })
@@ -480,9 +515,13 @@ public final class MachineConnection: ObservableObject {
             var line = command
             if !line.hasSuffix("\n") { line += "\n" }
             connection.send(content: line.data(using: .utf8), completion: .contentProcessed { [weak self] error in
-                guard let error else { return }
+                guard let error else {
+                    return
+                }
                 Task { @MainActor in
-                    guard let self, self.sessionID == sessionID else { return }
+                    guard let self, self.sessionID == sessionID else {
+                        return
+                    }
                     self.lastError = "Send failed: \(error.localizedDescription)"
                 }
             })
@@ -509,7 +548,9 @@ public final class MachineConnection: ObservableObject {
             return true
         }
 
-        guard let connection, wireProtocol != nil else { return false }
+        guard let connection, wireProtocol != nil else {
+            return false
+        }
 
         if command != .statusQuery {
             appendLog("> \(command.logText)")
@@ -526,9 +567,13 @@ public final class MachineConnection: ObservableObject {
 
         connection.send(content: payload, completion: .contentProcessed { [weak self] error in
             // A dropped status poll is noise; a dropped hold/reset is not.
-            guard let error, command != .statusQuery else { return }
+            guard let error, command != .statusQuery else {
+                return
+            }
             Task { @MainActor in
-                guard let self, self.sessionID == sessionID else { return }
+                guard let self, self.sessionID == sessionID else {
+                    return
+                }
                 self.lastError = "Send failed: \(error.localizedDescription)"
             }
         })
@@ -619,7 +664,9 @@ public final class MachineConnection: ObservableObject {
         pollTimer?.invalidate()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self, self.sessionID == sessionID, !self.isStatusPollingPaused else { return }
+                guard let self, self.sessionID == sessionID, !self.isStatusPollingPaused else {
+                    return
+                }
                 self.requestStatus()
             }
         }
@@ -632,11 +679,15 @@ public final class MachineConnection: ObservableObject {
         guard let connection else { return }
         connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] data, _, isComplete, error in
             Task { @MainActor in
-                guard let self, self.sessionID == sessionID else { return }
+                guard let self, self.sessionID == sessionID else {
+                    return
+                }
                 if let data, !data.isEmpty {
                     self.routeIncoming(data)
                 }
-                guard self.sessionID == sessionID else { return }
+                guard self.sessionID == sessionID else {
+                    return
+                }
                 if let error {
                     self.lastError = "Receive error: \(error.localizedDescription)"
                     self.disconnect()
@@ -668,9 +719,13 @@ public final class MachineConnection: ObservableObject {
             let chunk = lineBuffer[..<newlineIndex]
             lineBuffer.removeSubrange(...newlineIndex)
 
-            guard let line = String(data: chunk, encoding: .utf8) else { continue }
+            guard let line = String(data: chunk, encoding: .utf8) else {
+                continue
+            }
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
+            guard !trimmed.isEmpty else {
+                continue
+            }
             handleLine(trimmed)
         }
     }
@@ -690,7 +745,9 @@ public final class MachineConnection: ObservableObject {
                         let line = String(decoding: normalInfoBuffer, as: UTF8.self)
                             .trimmingCharacters(in: .whitespacesAndNewlines)
                         normalInfoBuffer.removeAll()
-                        if !line.isEmpty { handleLine(line) }
+                        if !line.isEmpty {
+                            handleLine(line)
+                        }
                     } else {
                         normalInfoBuffer.append(byte)
                     }
@@ -704,7 +761,9 @@ public final class MachineConnection: ObservableObject {
                 continue
             }
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
+            guard !trimmed.isEmpty else {
+                continue
+            }
             handleLine(trimmed)
         }
     }
