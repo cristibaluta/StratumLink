@@ -32,6 +32,7 @@ public enum SL {
     // MARK: G-code
     public typealias Uploader = GCodeUploader
     public typealias JobRunner = GCodeJobRunner
+    public typealias BatchSender = GCodeBatchSender
     public typealias Bounds = GCodeBounds
 
     // MARK: Machine files & info

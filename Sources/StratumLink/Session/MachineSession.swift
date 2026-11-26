@@ -73,6 +73,9 @@ public final class MachineSession {
     public let connection: MachineConnection
     public let jobRunner: GCodeJobRunner
     public let uploader: GCodeUploader
+    /// Sends a small group of lines at once and waits for all their
+    /// acknowledgements (jogging: `G91`, move, `G90`).
+    public let batch = GCodeBatchSender()
     /// Firmware version and SD-card file list.
     public let info = MachineInfo()
     /// Fetches files from the SD card.
@@ -167,6 +170,9 @@ public final class MachineSession {
         jobRunner.configure { [weak self] line in
             self?.sendRawCommand(line)
         }
+        batch.configure { [weak self] line in
+            self?.sendRawCommand(line)
+        }
         uploader.configure(
             sendLine: { [weak self] line in
                 self?.sendRawCommand(line)
@@ -211,6 +217,7 @@ public final class MachineSession {
         }
         connection.onLine = { [weak self] line in
             self?.jobRunner.handleMachineLine(line)
+            self?.batch.handleMachineLine(line)
             self?.uploader.handleMachineLine(line)
             self?.info.handleMachineLine(line)
             self?.downloader.handleMachineLine(line)
@@ -573,6 +580,7 @@ public final class MachineSession {
         // Order matters: empty the queue first so an "ok" that's still on
         // its way can't trigger another line after the reset.
         jobRunner.stop()
+        batch.reset()
         onEvent?(.motionAborting)
 
         guard connection.sendRealtime(.softReset) else { return }
@@ -689,6 +697,7 @@ public final class MachineSession {
         info.reset()
         downloader.connectionClosed()
         jobRunner.stop()
+        batch.reset()
         uploader.connectionClosed()
         onEvent?(.disconnected)
         // `lastError` is only set by failures, not by an ordinary disconnect.
